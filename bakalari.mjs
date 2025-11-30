@@ -1,8 +1,8 @@
 import axios from 'axios';
 import dotenv from 'dotenv';
-import qs from 'qs';
 import fs from 'fs';
 import { get } from 'http';
+import qs from 'qs';
 dotenv.config();
 console.log(process.env.BAK_USERNAME);
 
@@ -14,12 +14,18 @@ class Bakalari {
     this.baseURL = 'https://gateway.gymvod.cz:444/api';
   }
   async login() {
+
+    if (!this.username || !this.password) {
+      throw new Error('Username or password not set in environment variables');
+    }
+
     const data = qs.stringify({
       client_id: 'ANDR',
       grant_type: 'password',
       username: this.username,
       password: this.password
     });
+    
     // LOG IN 
     let res2 = await axios.post(`${this.baseURL}/login`, data, {
       headers: {
