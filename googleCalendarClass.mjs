@@ -87,6 +87,7 @@ class GoogleCalendar {
       throw err;
     }
   }
+  
   async authorize() {
     console.log('[authorize] Starting authorization process (service account)...');
 
@@ -109,6 +110,10 @@ class GoogleCalendar {
 
   async listEvents() {
     try {
+      if(!this.auth) {
+        throw new Error('No auth client available. Call login() first.');
+      }
+
       const client = this.auth
       const calendar = google.calendar({ version: 'v3', auth: this.auth });
       const res = await calendar.events.list({
@@ -118,6 +123,7 @@ class GoogleCalendar {
         singleEvents: true,
         orderBy: 'startTime',
       });
+
       const events = res.data.items;
       if (!events || events.length === 0) {
         console.log('No upcoming events found.');
