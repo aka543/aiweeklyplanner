@@ -1,21 +1,37 @@
 import axios from 'axios';
-import  OpenAI  from 'openai';
+import { time } from 'console';
+import dotenv from 'dotenv';
+import fs from 'fs';
+import OpenAI from 'openai';
 import Bakalari from './bakalari.mjs';
 import GoogleCalendar from './googleCalendarClass.mjs';
-import fs from 'fs';
-import dotenv from 'dotenv';
-import { time } from 'console';
 dotenv.config();
+
+
 // Bakalari API
 const bakalari = new Bakalari();
-await bakalari.login();
+try {
+  await bakalari.login();
+} catch (error) {
+  console.error('Error during Bakalari login:', error);
+  process.exit(1);
+} 
+
 const timetableInfo = await bakalari.getTimetableInfoActual();
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+
 // Google Calendar API
 let gc = new GoogleCalendar();
-await gc.login();
+try {
+  await gc.login();
+} catch (error) {
+  console.error('Error during Google Calendar login:', error);
+  process.exit(1);
+}
+
 const events = await gc.listEvents();
 const eventsAI = await gc.listEventsAI();
 await gc.listCalendars();
