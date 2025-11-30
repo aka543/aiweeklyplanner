@@ -1,16 +1,18 @@
+import 'dotenv/config';
 import fs from 'fs/promises';
-import path from 'path';
-import process from 'process';
-import http from 'http';
+// import { OAuth2Client } from 'google-auth-library'; // removed - using service account JWT
 import { google } from 'googleapis';
-import { OAuth2Client } from 'google-auth-library';
+import http from 'http';
 import open from 'open';
+import path from 'path';
+import process, { exit } from 'process';
 import destroyer from 'server-destroy';
 
 
 class GoogleCalendar {
   constructor() {
-    this.SCOPES = ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/tasks'];
+    this.CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID;
+    this.SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
     this.TOKEN_PATH = path.join(process.cwd(), 'token.json');
     this.CREDENTIALS_PATH = path.join(process.cwd(), 'credentials.json');
     this.auth = null;
@@ -39,6 +41,7 @@ class GoogleCalendar {
       return null;
     }
   }
+
   async saveCredentials(client) {
     console.log('[saveCredentials] Attempting to save credentials...');
     const content = await fs.readFile(this.CREDENTIALS_PATH, 'utf-8');
@@ -54,112 +57,48 @@ class GoogleCalendar {
 
     await fs.writeFile(this.TOKEN_PATH, JSON.stringify(payload));
   }
-  async authenticateManually() {
-    console.log('[authenticateManually] Starting manual authentication...');
-    const content = await fs.readFile(this.CREDENTIALS_PATH, 'utf-8');
-    const keys = JSON.parse(content).installed;
-    console.log('[authenticateManually] Credentials loaded from credentials.json.');
 
-    const oAuth2Client = new OAuth2Client(
-      keys.client_id,
-      keys.client_secret,
-      keys.redirect_uris[0]
-    );
+  // New: authenticate using a service account (reads credentials from environment)
+  async authenticateWithServiceAccount() {
+    console.log('[authenticateWithServiceAccount] Using service account from environment variables...');
+    const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+    const privateKey = process.env.GOOGLE_PRIVATE_KEY;
 
-    const authUrl = oAuth2Client.generateAuthUrl({
-      access_type: 'offline',
-      prompt: 'consent',
-      scope: this.SCOPES,
-    });
-    console.log(`[authenticateManually] Auth URL generated: ${authUrl}`);
-
-    return new Promise((resolve, reject) => {
-      let server; // Declare server outside try block to ensure it's in scope for finally
-
-      const setupServer = () => {
-          server = http.createServer(async (req, res) => {
-            try {
-              if (req.url && req.url.indexOf('/?code=') > -1) {
-                const url = new URL(req.url, keys.redirect_uris[0]); // Use correct redirect URI
-                const code = url.searchParams.get('code');
-                console.log(`[authenticateManually] Received callback code: ${code ? 'YES' : 'NO'}`);
-                res.end('Authentication successful! You can close this window.');
-
-                try {
-                  const { tokens } = await oAuth2Client.getToken(code);
-                  oAuth2Client.setCredentials(tokens);
-                  console.log(`[authenticateManually] Tokens received. Refresh token present: ${!!tokens.refresh_token}`);
-
-                  if (!tokens.refresh_token) {
-                      console.warn("⚠️ No refresh token received during this authentication. This is normal if you've already granted offline access for these scopes. Ensure token.json is still valid, or delete it to force a new refresh token.");
-                  }
-                  resolve(oAuth2Client); // Resolve the promise with the authenticated client
-                } catch (tokenError) {
-                  console.error(`[authenticateManually] ❌ ERROR getting tokens: ${tokenError.message}`);
-                  res.writeHead(500);
-                  res.end('Authentication failed during token exchange.');
-                  reject(tokenError); // Reject the promise on token exchange error
-                } finally {
-                    if (server) {
-                        server.destroy(); // Ensure server is destroyed regardless of token success/failure
-                        console.log('[authenticateManually] Local server destroyed.');
-                    }
-                }
-              } else {
-                res.writeHead(404);
-                res.end('Not Found');
-              }
-            } catch (error) {
-              console.error(`[authenticateManually] ❌ ERROR in server callback: ${error.message}`);
-              res.writeHead(500);
-              res.end('Server internal error during authentication.');
-              if (server) {
-                  server.destroy();
-              }
-              reject(error); // Reject the promise on server callback error
-            }
-          });
-
-          server.listen(3000, () => {
-            console.log('[authenticateManually] Local server listening on http://localhost:3000 for OAuth callback...');
-            open(authUrl, { wait: false }).then(cp => cp.unref());
-          }).on('error', (err) => { // Handle server start errors
-            console.error(`[authenticateManually] ❌ ERROR: Local server failed to start on port 3000: ${err.message}`);
-            reject(err); // Reject the promise if server fails to start
-          });
-
-          destroyer(server); // Make the server destroyable by server.destroy()
-      };
-
-      setupServer();
-    });
-  }
-  async authorize() {
-    console.log('[authorize] Starting authorization process...');
-    let client = await this.loadSavedCredentialsIfExist();
-    if (client) {
-      console.log('[authorize] Using saved credentials.');
-      return client;
+    if (!clientEmail || !privateKey) {
+      throw new Error('Missing required env vars: GOOGLE_CLIENT_EMAIL and GOOGLE_PRIVATE_KEY');
     }
 
-    console.log('[authorize] No saved credentials, performing manual authentication...');
+    // In .env private key often contains literal '\n' sequences — convert them back to newlines
+    const normalizedKey = privateKey.replace(/\\n/g, '\n');
+
+    const jwtClient = new google.auth.JWT({
+      email: clientEmail,
+      key: normalizedKey,
+      scopes: this.SCOPES,
+    });
+
     try {
-      client = await this.authenticateManually();
-      
-      // Only attempt to save if the manual authentication succeeded and returned a client
-      if (client && client.credentials && client.credentials.refresh_token) {
-        console.log('[authorize] Refresh token received, saving credentials...');
-        await this.saveCredentials(client);
-      } else {
-        // This warning is for cases where manual auth finished but no NEW refresh token was given
-        // (e.g., user re-authenticated without revoking access).
-        // If token.json doesn't exist AND this is hit, it implies Google didn't give a refresh token.
-        console.warn("⚠️ No new refresh token received during this session. 'token.json' will not be created/updated with a new refresh token. This is expected if 'prompt: consent' was not used or if user already granted offline access for these scopes. Ensure previous token.json is valid or proceed if temporary access is sufficient.");
-      }
-      return client; // Return the client whether or not a refresh token was received/saved
+      // authorize() will verify the credentials (and populate tokens on the client)
+      await jwtClient.authorize();
+      console.log('[authenticateWithServiceAccount] Service account authenticated successfully.');
+      return jwtClient;
     } catch (err) {
-      console.error(`[authorize] ❌ ERROR during manual authentication: ${err.message}`);
-      throw err; // Re-throw the error so main() can catch it
+      console.error(`[authenticateWithServiceAccount] ❌ Authentication failed: ${err.message}`);
+      throw err;
+    }
+  }
+  async authorize() {
+    console.log('[authorize] Starting authorization process (service account)...');
+
+    try {
+      // Use service account authentication exclusively
+      const client = await this.authenticateWithServiceAccount();
+      this.auth = client;
+      console.log('[authorize] Authenticated with service account.');
+      return client;
+    } catch (err) {
+      console.error(`[authorize] ❌ Service account authentication failed: ${err.message}`);
+      throw err;
     }
   }
   // New: login() method to authenticate and store in this.auth
@@ -167,38 +106,33 @@ class GoogleCalendar {
     this.auth = await this.authorize();
     return this.auth;
   }
-  async listEvents(auth) {
-    const usedAuth = this.auth || auth;
-    if (!usedAuth) throw new Error('No auth client available. Call login() or pass auth.');
-    const calendar = google.calendar({ version: 'v3', auth: usedAuth });
 
-    const now = new Date();
-    const nextWeek = new Date();
-    nextWeek.setDate(now.getDate() + 7);
-// 'd16af1522c1855ebb3da9355190697e13ca42d8ff0033da2bee4bde70b4c0bb1@group.calendar.google.com'
-    const res = await calendar.events.list({
-      calendarId: 'primary',
-      timeMin: now.toISOString(),
-      timeMax: nextWeek.toISOString(),
-      singleEvents: true,
-      orderBy: 'startTime',
-    });
-    
-
-    const events = res.data.items;
-    if (!events || events.length === 0) {
-      console.log('No upcoming events found.');
-      return;
+  async listEvents() {
+    try {
+      const client = this.auth
+      const calendar = google.calendar({ version: 'v3', auth: this.auth });
+      const res = await calendar.events.list({
+        calendarId: process.env.GOOGLE_CALENDAR_ID,
+        timeMin: (new Date()).toISOString(),
+        maxResults: 10,
+        singleEvents: true,
+        orderBy: 'startTime',
+      });
+      const events = res.data.items;
+      if (!events || events.length === 0) {
+        console.log('No upcoming events found.');
+        return;
+      }
+      console.log('Upcoming 10 events:');
+      events.map((event) => {
+        const start = event.start.dateTime || event.start.date;
+        console.log(`${start} - ${event.summary}`);
+      });
+    } catch (error) {
+      console.error('Error listing events:', error);
     }
-    const upcomingEvents = {};
-    // console.log('Upcoming 1 week of events:');
-    events.forEach((event) => {
-      const start = event.start.dateTime || event.start.date;
-      // console.log(`${start} - ${event.summary}`);
-      upcomingEvents[event.start.dateTime || event.start.date] = {summary: event.summary, description: event.description, location: event.location};
-    });
-    return upcomingEvents;
   }
+  
   async listEventsAI(auth) {
     const usedAuth = this.auth || auth;
     if (!usedAuth) throw new Error('No auth client available. Call login() or pass auth.');

@@ -1,10 +1,10 @@
 import fs from 'fs/promises';
+import { OAuth2Client } from 'google-auth-library';
+import { google } from 'googleapis';
+import http from 'http';
+import open from 'open';
 import path from 'path';
 import process from 'process';
-import http from 'http';
-import { google } from 'googleapis';
-import { OAuth2Client } from 'google-auth-library';
-import open from 'open';
 import destroyer from 'server-destroy';
 
 const SCOPES = ['https://www.googleapis.com/auth/calendar'];
@@ -12,6 +12,7 @@ const TOKEN_PATH = path.join(process.cwd(), 'token.json');
 const CREDENTIALS_PATH = path.join(process.cwd(), 'credentials.json');
 
 async function loadSavedCredentialsIfExist() {
+  return null;
   try {
     const content = await fs.readFile(TOKEN_PATH, 'utf-8');
     const credentials = JSON.parse(content);
@@ -172,3 +173,4 @@ async function listCalendars(auth) {
     console.error('❌ Error:', err.message);
   }
 })();
+
