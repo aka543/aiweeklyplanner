@@ -43,11 +43,31 @@ try {
 
 const events = await gc.listEvents();
 const eventsAI = await gc.listEventsAI();
-const newE = await gc.createEvent({
-  summary: 'Test Event from API',
-})
-console.log(JSON.stringify(events));
-console.log(JSON.stringify(timetableInfo));
+// const newE = await gc.createEvent({
+//   summary: 'Test Event from API',
+//   location: 'Online',
+//   description: 'This is a test event created via Google Calendar API',
+//   start: {
+//     dateTime: '2024-07-10T10:00:00+02:00',
+//     timeZone: 'Europe/Prague',
+//   },
+//   end: {
+//     dateTime: '2024-07-10T11:00:00+02:00',
+//     timeZone: 'Europe/Prague',
+//   },
+//   colorId: '5',
+// })
+// let idk = await gc.createTask({
+//   title: 'Test Task from API',
+//   notes: 'This is a test task created via Google Tasks API',
+//   due: '2024-07-15T17:00:00.000Z',
+//   status: 'needsAction',
+// })
+let tasks22 = await gc.myFunction();
+let taskLists = await gc.listTaskLists();
+console.log(taskLists)
+// console.log(JSON.stringify(events));
+// console.log(JSON.stringify(timetableInfo));
 
 process.exit(0);
 

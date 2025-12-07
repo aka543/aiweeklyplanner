@@ -16,7 +16,7 @@ class GoogleCalendar {
     this.GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY;
 
     // this.SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
-    this.SCOPES = ['https://www.googleapis.com/auth/calendar'];
+    this.SCOPES = ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/tasks'];
     this.auth = null;
   }
 
@@ -163,23 +163,15 @@ class GoogleCalendar {
     console.log('[googleCl/createEvents] -> Events created');
     return 200;
   }
-  async createTask(auth, task) {
-    const usedAuth = this.auth || auth;
-    if (!usedAuth) {
+  async createTask(task) {
+    if (!this.auth) {
         console.error('[createTask] No auth client available.');
         throw new Error('No auth client available. Call login() first.');
     }
-    const tasksApi = google.tasks({ version: 'v1', auth: usedAuth });
-    // const task = {
-    //   title: taskDetails.title,
-    //   notes: taskDetails.notes || '',
-    //   due: taskDetails.due, // This should be an RFC 3339 date-time, e.g., '2025-07-25T17:00:00.000Z'
-    //   status: taskDetails.status || 'needsAction', // Can be 'needsAction' or 'completed'
-    //   // You can also add parent, position, etc.
-    // };
+    const tasksApi = google.tasks({ version: 'v1', auth: this.auth });
     try {
       const res = await tasksApi.tasks.insert({
-        tasklist: 'SEVaT3Mta1hvdUhwNzNsbg',
+        tasklist: 'MTE2ODkyMjIyMTM3NDE4NzE5MjA6MDow',
         requestBody: task
       });
       console.log('[createTask] task succesfuly inserted');
@@ -199,40 +191,30 @@ class GoogleCalendar {
       console.log(`${cal.summary} (ID: ${cal.id})`);
     });
   }
-  async listTasks(auth) {
-    const usedAuth = this.auth || auth;
-    if (!usedAuth) throw new Error('[listTasks] No auth client available. Call login() or pass auth.');
+  async listTasks(numOfTasks = 10) {
+    if (!this.auth) throw new Error('[listTasks] No auth client available. Call login() or pass auth.');
     const tasksApi = google.tasks({ version: 'v1', auth: this.auth });
-    try {
-      const res = await tasksApi.tasks.list({ tasklist: 'SEVaT3Mta1hvdUhwNzNsbg' });
-      const tasks = res.data.items;
-      if (!tasks || tasks.length === 0) {
-        console.log('No tasks found.');
-        return [];
-      }
-      console.log('--- Google Tasks ---');
-      let tasksFormed = {};
-      tasks.forEach((task) => {
-        console.log(`- ${task.title} (Due: ${task.due || 'N/A'}, Status: ${task.status}, ID: ${task.id})`);
-        tasksFormed[task.title] = {notes: task.notes, due: task.due, status: task.status, completed: task.completed};
-      })
-
-      console.log('---------------------');
-      return tasksFormed;
+    const res = await tasksApi.tasks.list({ tasklist: 'MTE2ODkyMjIyMTM3NDE4NzE5MjA6MDow' , maxResults: numOfTasks });
+    const tasks = res.data.items;
+    if (!tasks || tasks.length === 0) {
+      console.log('[GCl/listTasks] -> No tasks found.');
+      return [];
     }
-    catch (err) {
-      console.error(`[listTasks] ❌ Error listing tasks: ${err.message}`);
-      throw err;
-    }
+    console.log('--- Google Tasks ---');
+    let tasksFormed = {};
+    tasks.forEach((task) => {
+      console.log(`- ${task.title} (Due: ${task.due || 'N/A'}, Status: ${task.status}, ID: ${task.id})`);
+      tasksFormed[task.title] = {notes: task.notes, due: task.due, status: task.status, completed: task.completed};
+    })
+    console.log(tasksFormed);
+    return tasksFormed;
 
   }
   async listTaskLists() {
-    const usedAuth = this.auth;
-    if (!usedAuth) {
-        console.error('[listTaskLists] No auth client available.');
+    if (!this.auth) {
         throw new Error('No auth client available. Call login() first.');
     }
-    const tasksApi = google.tasks({ version: 'v1', auth: usedAuth });
+    const tasksApi = google.tasks({ version: 'v1', auth: this.auth });
 
     try {
       const res = await tasksApi.tasklists.list();
