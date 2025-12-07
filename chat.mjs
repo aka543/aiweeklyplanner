@@ -43,9 +43,12 @@ try {
 
 const events = await gc.listEvents();
 const eventsAI = await gc.listEventsAI();
-await gc.listCalendars();
+
 console.log(JSON.stringify(events));
 console.log(JSON.stringify(timetableInfo));
+
+process.exit(0);
+
 let tasks = await gc.listTasks();
 console.log('tasks: ',tasks);
 let hobbies = `I like to ride a bike, especcialy some downhill riding, trails. 

@@ -11,55 +11,24 @@ import destroyer from 'server-destroy';
 
 class GoogleCalendar {
   constructor() {
-    this.CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID;
+    this.GOOGLE_CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID;
+    this.GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
+    this.GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY;
+
     this.SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
-    this.TOKEN_PATH = path.join(process.cwd(), 'token.json');
-    this.CREDENTIALS_PATH = path.join(process.cwd(), 'credentials.json');
     this.auth = null;
-    console.log(`[INIT] Token Path: ${this.TOKEN_PATH}`);
-    console.log(`[INIT] Credentials Path: ${this.CREDENTIALS_PATH}`);
   }
 
-  async loadSavedCredentialsIfExist() {
-    console.log('[loadSavedCredentialsIfExist] Attempting to load token...');
-    try {
-      const content = await fs.readFile(this.TOKEN_PATH, 'utf-8');
-      const credentials = JSON.parse(content);
-      console.log('[loadSavedCredentialsIfExist] Token file read successfully.');
-
-      const client = new OAuth2Client(
-        credentials.client_id,
-        credentials.client_secret
-      );
-
-      client.setCredentials({
-        refresh_token: credentials.refresh_token,
-      });
-      console.log('[loadSavedCredentialsIfExist] Client set with saved credentials.');
-      return client;
-    } catch (err) {
-      return null;
+  async login() {
+    if (!this.GOOGLE_CALENDAR_ID || !this.GOOGLE_PRIVATE_KEY || !this.GOOGLE_CLIENT_EMAIL) {
+      throw new Error('Missing required env vars: GOOGLE_CALENDAR_ID, GOOGLE_CLIENT_EMAIL and GOOGLE_PRIVATE_KEY');
     }
+
+    this.auth = await this.#authorize();
+    return this.auth;
   }
 
-  async saveCredentials(client) {
-    console.log('[saveCredentials] Attempting to save credentials...');
-    const content = await fs.readFile(this.CREDENTIALS_PATH, 'utf-8');
-    const keys = JSON.parse(content).installed;
-    console.log('[saveCredentials] Credentials file read for client_id/secret.');
-
-    const payload = {
-      type: 'authorized_user',
-      client_id: keys.client_id,
-      client_secret: keys.client_secret,
-      refresh_token: client.credentials.refresh_token,
-    };
-
-    await fs.writeFile(this.TOKEN_PATH, JSON.stringify(payload));
-  }
-
-  // New: authenticate using a service account (reads credentials from environment)
-  async authenticateWithServiceAccount() {
+  async #authenticateWithServiceAccount() {
     console.log('[authenticateWithServiceAccount] Using service account from environment variables...');
     const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
     const privateKey = process.env.GOOGLE_PRIVATE_KEY;
@@ -87,13 +56,13 @@ class GoogleCalendar {
       throw err;
     }
   }
-  
-  async authorize() {
+
+  async #authorize() {
     console.log('[authorize] Starting authorization process (service account)...');
 
     try {
       // Use service account authentication exclusively
-      const client = await this.authenticateWithServiceAccount();
+      const client = await this.#authenticateWithServiceAccount();
       this.auth = client;
       console.log('[authorize] Authenticated with service account.');
       return client;
@@ -102,24 +71,18 @@ class GoogleCalendar {
       throw err;
     }
   }
-  // New: login() method to authenticate and store in this.auth
-  async login() {
-    this.auth = await this.authorize();
-    return this.auth;
-  }
 
-  async listEvents() {
+  async listEvents(numOfEvents = 10) {
     try {
       if(!this.auth) {
         throw new Error('No auth client available. Call login() first.');
       }
 
-      const client = this.auth
       const calendar = google.calendar({ version: 'v3', auth: this.auth });
       const res = await calendar.events.list({
         calendarId: process.env.GOOGLE_CALENDAR_ID,
         timeMin: (new Date()).toISOString(),
-        maxResults: 10,
+        maxResults: numOfEvents,
         singleEvents: true,
         orderBy: 'startTime',
       });
