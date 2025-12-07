@@ -18,10 +18,19 @@ try {
 } 
 
 const timetableInfo = await bakalari.getTimetableInfoActual();
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+let client;
+try {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is not set in environment variables');
+  }
 
+  client = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+} catch (error) {
+  console.error('Error initializing OpenAI client:', error);
+  process.exit(1);
+}
 
 // Google Calendar API
 let gc = new GoogleCalendar();
@@ -34,9 +43,12 @@ try {
 
 const events = await gc.listEvents();
 const eventsAI = await gc.listEventsAI();
-await gc.listCalendars();
+
 console.log(JSON.stringify(events));
 console.log(JSON.stringify(timetableInfo));
+
+process.exit(0);
+
 let tasks = await gc.listTasks();
 console.log('tasks: ',tasks);
 let hobbies = `I like to ride a bike, especcialy some downhill riding, trails. 
