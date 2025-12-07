@@ -43,7 +43,9 @@ try {
 
 const events = await gc.listEvents();
 const eventsAI = await gc.listEventsAI();
-
+const newE = await gc.createEvent({
+  summary: 'Test Event from API',
+})
 console.log(JSON.stringify(events));
 console.log(JSON.stringify(timetableInfo));
 

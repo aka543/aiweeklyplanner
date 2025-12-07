@@ -15,7 +15,8 @@ class GoogleCalendar {
     this.GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
     this.GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY;
 
-    this.SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
+    // this.SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
+    this.SCOPES = ['https://www.googleapis.com/auth/calendar'];
     this.auth = null;
   }
 
@@ -134,69 +135,33 @@ class GoogleCalendar {
     });
     return upcomingEvents;
   }
-  async createEvent(auth, event) {
-    const usedAuth = this.auth || auth;
-    if (!usedAuth) throw new Error('No auth client available. Call login() or pass auth.');
-    const calendar = google.calendar({ version: 'v3', auth: usedAuth });
-    // example event
-    // const event = {
-    //   summary: 'Meet Node.js Expert',
-    //   location: 'Online',
-    //   description: 'Discuss calendar integration',
-    //   start: {
-    //     dateTime: '2025-07-16T10:00:00+02:00',
-    //     timeZone: 'Europe/Prague',
-    //   },
-    //   end: {
-    //     dateTime: '2025-07-16T11:00:00+02:00',
-    //     timeZone: 'Europe/Prague',
-    //   },
-    //   colorId: '5',
-    // };
-
-    const res = await calendar.events.insert({
+  async createEvent(event) {
+    if (!this.auth) throw new Error('No auth client available. Call login() or pass auth.');
+    const calendar = google.calendar({ version: 'v3', auth: this.auth });
+    calendar.events.insert({
       calendarId: 'd16af1522c1855ebb3da9355190697e13ca42d8ff0033da2bee4bde70b4c0bb1@group.calendar.google.com',
-      requestBody: event,
+      resource: event,
     });
-
     console.log('✅ Event created:');
     return 200;
-    console.log(res.data.htmlLink);
+    // console.log(res.data.htmlLink);
   }
-  async createEvents(auth, events) {
+  async createEvents(events) {
     if(events === 'plan already created') {
       console.log('Plan already created, skipping event creation');
       return 200;
     }
-    const usedAuth = this.auth || auth;
-    if (!usedAuth) throw new Error('No auth client available. Call login() or pass auth.');
-    const calendar = google.calendar({ version: 'v3', auth: usedAuth });
-    // example event
-    // const event = {
-    //   summary: 'Meet Node.js Expert',
-    //   location: 'Online',
-    //   description: 'Discuss calendar integration',
-    //   start: {
-    //     dateTime: '2025-07-16T10:00:00+02:00',
-    //     timeZone: 'Europe/Prague',
-    //   },
-    //   end: {
-    //     dateTime: '2025-07-16T11:00:00+02:00',
-    //     timeZone: 'Europe/Prague',
-    //   },
-    //   colorId: '5',
-    // };
-    let eventsObject = JSON.parse(events);
-    console.log('creating an event object',eventsObject);
-    eventsObject.forEach(async (event) => {
-      const res = await calendar.events.insert({
+    if (!this.auth) throw new Error('No auth client available. Call login() or pass auth.');
+    const calendar = google.calendar({ version: 'v3', auth: this.auth });
+
+    events.forEach(async (event) => {
+      await calendar.events.insert({
         calendarId: 'd16af1522c1855ebb3da9355190697e13ca42d8ff0033da2bee4bde70b4c0bb1@group.calendar.google.com',
         requestBody: event,
       });
     })
-    console.log('✅ Event created:');
+    console.log('[googleCl/createEvents] -> Events created');
     return 200;
-    console.log(res.data.htmlLink);
   }
   async createTask(auth, task) {
     const usedAuth = this.auth || auth;
